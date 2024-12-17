@@ -8,7 +8,7 @@ require (
 	github.com/beevik/etree v1.4.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/crypto v0.27.0
+	golang.org/x/crypto v0.31.0
 )
 
 require (
