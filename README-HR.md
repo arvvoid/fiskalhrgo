@@ -6,7 +6,10 @@
 \/    |_|___/_|\_\__,_|_\/ /_/\/ \_/ \____/\___/\/                                     
 ```
 [![Test](https://github.com/l-d-t/fiskalhrgo/actions/workflows/test.yml/badge.svg)](https://github.com/l-d-t/fiskalhrgo/actions/workflows/test.yml)
+[![CodeQL](https://github.com/l-d-t/fiskalhrgo/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/l-d-t/fiskalhrgo/actions/workflows/github-code-scanning/codeql)
 [![Go Report Card](https://goreportcard.com/badge/github.com/l-d-t/fiskalhrgo)](https://goreportcard.com/report/github.com/l-d-t/fiskalhrgo)
+![Go version](https://img.shields.io/badge/Go-1.22%2B-blue)
+[![Go Reference](https://pkg.go.dev/badge/github.com/l-d-t/fiskalhrgo.svg)](https://pkg.go.dev/github.com/l-d-t/fiskalhrgo)
 
 # FiskalHR Go
 
@@ -36,10 +39,13 @@ Iako postoji mnogo open-source implementacija libraryja za fiskalizaciju, one su
 - Ekstrakcija i vraćanje detalja certifikata kao što su javni ključ, izdavatelj, subjekt, serijski broj i razdoblje valjanosti.
 - Pomoćne funkcije za generiranje QR koda za ispis na računima u raznim formatima.
 
+### Go Verzija Kompatibilnost
+- Minimalna testirana i podržana verzija: **Go 1.22**
+- Preporučena verzija: **Go 1.23.1+** za najbolju izvedbu
+
 ## Instalacija
 
 U korijenu vašeg projekta preuzmite modul
-
 ```
 go get github.com/l-d-t/fiskalhrgo
 ```
@@ -57,6 +63,8 @@ import (
     "fmt"
     "log"
     "time"
+
+    "github.com/l-d-t/fiskalhrgo"
 )
 
 func main() {
@@ -115,13 +123,6 @@ func main() {
         "G",           // payment method G - cash, K - credit card, T -
                        // transfer, O - other, C - check (deprecated)
         "12345678901", // operator OIB
-        false,         // late delivery, if previous attempt failed but the
-                       // invoice was issued with just ZKI
-        "",            // receipt book number, if the invoicing system was
-                       // unusable and the invoice was issued manually, the
-                       // number of the receipt book
-        "",            // unused, reserved field for future or temporary
-                       // unexpected use by the CIS, should be empty
     )
 
     if err != nil {
@@ -140,14 +141,14 @@ func main() {
     // serial of the certificate used to generate it for future reference. You
     // can get the cert serial with fiskalEntity.GetCertSERIAL().
 
-    // Display the invoice
+    // Display the invoice for test
     fmt.Println(invoice)
 
     // NOW we should have a saved invoice with a valid ZKI and we are ready to
     // send the invoice to the CIS
 
     // Send test invoice to CIS with InvoiceRequest
-    jir, zkiR, err := fiskalEntity.InvoiceRequest(invoice)
+    jir, zkiR, err := invoice.InvoiceRequest()
 
     if err != nil {
         log.Fatalf("Failed to send invoice: %v", err)
@@ -190,3 +191,28 @@ Pridonosioci su dobrodošli! Možete doprinijeti razvoju na sljedeće načine:
 - Slanjem pull requesta za nove značajke ili poboljšanje postojećih (preporučeno prije kontaktirat i konzultirat se nego se posao napravi)
 
 Vaš doprinos je neprocjenjiv i pomaže nam u stvaranju boljeg proizvoda za zajdnicu.
+
+## Napomena za pokretanje testova
+
+Testove možete pokrenuti s detaljnim ispisom pomoću
+
+```bash
+go test -v
+```
+
+Prije pokretanja potrebno je postaviti određene varijable okoline.
+
+Varijabla okoline `CIS_P12_BASE64` mora sadržavati jednolinijski base64 enkodirani niz izvorne važeće Fiskalne potvrde u P12 formatu.
+Ovaj enkodirani niz je ključan za interakciju testova s CIS-om (Hrvatskim sustavom fiskalizacije).
+
+Za enkodiranje vaše P12 potvrde (npr. `fiskalDemo1.p12`) u jednolinijski base64 niz na Linux sustavu, upotrijebite sljedeću naredbu:
+
+```bash
+base64 -w 0 fiskal1.p12
+```
+
+Zatim postavite varijablu okoline `CIS_P12_BASE64` s enkodiranim nizom.
+
+Dodatno, provjerite da su varijable okoline `FISKALHRGO_TEST_CERT_PASSWORD` i `FISKALHRGO_TEST_CERT_OIB` postavljene s odgovarajućom lozinkom potvrde i OIB-om (Osobnim identifikacijskim brojem).
+
+Ovaj sustav se koristi za testove jer će se testovi izvoditi u CI (Kontinuiranoj integraciji), gdje se tajne, kao što su one na GitHubu, prenose putem varijabli okoline. Ovo čini upravljanje jednostavnim i praktičnim. Potvrda, lozinka i OIB za testove mogu se lako pohraniti kao GitHub Action tajne, na primjer.

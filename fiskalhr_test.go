@@ -1,12 +1,15 @@
+package fiskalhrgo
+
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024 L. D. T. d.o.o.
 // Copyright (c) contributors for their respective contributions. See https://github.com/l-d-t/fiskalhrgo/graphs/contributors
-package fiskalhrgo
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 )
 
 var testEntity *FiskalEntity
+var testOIB, certPath, certPassword string
 
 // TestMain is run before any other tests. It sets up the shared instances and read env variables.
 func TestMain(m *testing.M) {
@@ -29,19 +33,55 @@ ___________.__        __           .__    ___ _____________    ________
 
 	fmt.Println("Setting up...")
 
-	certPath := os.Getenv("FISKALHRGO_TEST_CERT_PATH")
-	certPassword := os.Getenv("FISKALHRGO_TEST_CERT_PASSWORD")
-	testOIB := os.Getenv("FISKALHRGO_TEST_CERT_OIB")
+	certBase64 := os.Getenv("CIS_P12_BASE64")
+	certPassword = os.Getenv("FISKALHRGO_TEST_CERT_PASSWORD")
+	testOIB = os.Getenv("FISKALHRGO_TEST_CERT_OIB")
 
-	if certPath == "" || certPassword == "" || testOIB == "" {
-		fmt.Println("FISKALHRGO_TEST_CERT_PATH or FISKALHRGO_TEST_CERT_PASSWORD or FISKALHRGO_TEST_CERT_OIB environment variables are not set")
+	if certBase64 == "" || certPassword == "" || testOIB == "" {
+		fmt.Println("CIS_P12_BASE64 or FISKALHRGO_TEST_CERT_PASSWORD or FISKALHRGO_TEST_CERT_OIB environment variables are not set")
+		fmt.Println(`
+		The CIS_P12_BASE64 environment variable must contain a single-line base64 
+		encoded string of the original valid Fiskal certificate in P12 format. This 
+		encoded string is essential for the tests to  interact with the CIS 
+		(Croatian Fiscalization System).
+		
+		To encode your P12 certificate file (e.g., fiskalDemo1.p12) to a single-line 
+		base64 string on a Linux system, use the following command:
+		
+			base64 -w 0 fiskal1.p12
+		
+		Then, set the CIS_P12_BASE64 environment variable with the encoded string.
+		
+		Additionally, ensure that the FISKALHRGO_TEST_CERT_PASSWORD and 
+		FISKALHRGO_TEST_CERT_OIB environment variables are set with the appropriate 
+		certificate password and OIB (Personal Identification Number) respectively.
+		
+		This system is used for the tests because these tests will run in CI 
+		(Continuous Integration), so secrets, for example on GitHub, are passed as 
+		environment variables. This makes it easy and convenient to manage. The 
+		certificate, password, and OIB for tests can be easily stored as GitHub 
+		Action secrets, for example.`)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Using certificate: %s\n", certPath)
 	fmt.Printf("Test OIB: %s\n", testOIB)
 
-	var err error
+	// Decode the base64 certificate
+	certData, err := base64.StdEncoding.DecodeString(certBase64)
+	if err != nil {
+		fmt.Printf("Failed to decode base64 certificate: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create a temporary file to store the certificate
+	tempDir := os.TempDir()
+	certPath = filepath.Join(tempDir, "fiskal.p12")
+	err = os.WriteFile(certPath, certData, 0644)
+	if err != nil {
+		fmt.Printf("Failed to write certificate to temp file: %v\n", err)
+		os.Exit(1)
+	}
+
 	testEntity, err = NewFiskalEntity(testOIB, true, "TEST3", true, true, true, certPath, certPassword)
 	if err != nil {
 		fmt.Printf("Failed to create FiskalEntity: %v\n", err)
@@ -100,13 +140,15 @@ func TestGenerateZKI(t *testing.T) {
 // GitHub repository and CI environment, where the correct test certificate is available.
 
 func TestKnownZKI(t *testing.T) {
+	if os.Getenv("FISKALHRGO_TEST_KNOWN_ZKI") == "" {
+		t.Skip("Skipping TestKnownZKI because FISKALHRGO_TEST_KNOWN_ZKI environment variable is not set")
+	}
 	t.Logf("Testing Known LDT ZKI generation...")
 
-	expectedZKI := "0b173c6127809d4f0fff53e13222c819" // This is the ZKI for the test certificate
+	expectedZKI := os.Getenv("FISKALHRGO_TEST_KNOWN_ZKI") // This is the ZKI for the test certificate
 
-	// Check if the external contributor has set their own known ZKI via environment variable
-	if envZKI := os.Getenv("FISKALHRGO_TEST_KNOWN_ZKI"); envZKI != "" {
-		expectedZKI = envZKI
+	if !ValidateZKI(expectedZKI) {
+		t.Fatalf("Invalid ZKI provided in FISKALHRGO_TEST_KNOWN_ZKI environment variable")
 	}
 
 	timeString := "17.05.2024 16:00:38"
@@ -132,9 +174,8 @@ func TestKnownZKI(t *testing.T) {
 	if zki != expectedZKI {
 		t.Error("Note:")
 		t.Error("- The ZKI (Protection Code) is dependent on the private key used.")
-		t.Error("- If you're an external contributor and don't have the correct test certificate, this test is expected to fail.")
-		t.Error("- You can use the FISKALHRGO_TEST_KNOWN_ZKI environment variable to specify your own expected ZKI for testing.")
-		t.Error("- This test should pass on the official GitHub and CI setup where the correct certificate is available.")
+		t.Error("- Use the FISKALHRGO_TEST_KNOWN_ZKI environment variable to specify your expected ZKI for testing.")
+		t.Error("- This test should pass on the official GitHub and CI setup where the correct certificate and ZKI pair is available.")
 		t.Fatalf("ERROR - Expected ZKI: %s, got %s", expectedZKI, zki)
 	} else {
 		t.Log("ZKI matched the expected value.")
@@ -170,6 +211,28 @@ func TestPing(t *testing.T) {
 	t.Log("Ping OK!")
 }
 
+// Test CIS production ping
+// This test just the SSL connection and production cert verification pool and ping message to the CIS production server
+// The rest should be identical to the demo environment and the rest can only be tested in the demo environment ofc.
+func TestProductionPing(t *testing.T) {
+	if os.Getenv("CISTESTPRODPING") == "" {
+		t.Skip("Skipping TestProductionPing because CISTESTPRODPING environment variable is not set")
+	}
+	t.Log("Testing Production Ping...")
+	// The path is still to the demo cert, but is not important since we will test only the SSL connection and Echo message
+	// that is not signed by the user certificate
+	prodEntity, err := NewFiskalEntity(testEntity.oib, false, "TEST3", true, false, false, certPath, certPassword)
+	if err != nil {
+		t.Fatalf("Failed to create production FiskalEntity: %v", err)
+	}
+
+	err = prodEntity.PingCIS()
+	if err != nil {
+		t.Fatalf("Failed to make Production Ping request: %v", err)
+	}
+	t.Log("Production Ping OK!")
+}
+
 // Test CIS invoice with helper functions
 func TestNewCISInvoice(t *testing.T) {
 	pdvValues := [][]interface{}{
@@ -192,11 +255,7 @@ func TestNewCISInvoice(t *testing.T) {
 	brOznRac := uint(rand.Intn(6901) + 100)
 	oznNapUr := uint(1)
 	iznosUkupno := "1330.50"
-	nacinPlac := "G"
 	oibOper := "12345678901"
-	nakDost := true
-	paragonBrRac := "12345"
-	specNamj := ""
 
 	invoice, zki, err := testEntity.NewCISInvoice(
 		dateTime,
@@ -210,11 +269,8 @@ func TestNewCISInvoice(t *testing.T) {
 		"0.00",
 		naknadeValues,
 		iznosUkupno,
-		nacinPlac,
+		CISCash,
 		oibOper,
-		nakDost,
-		paragonBrRac,
-		specNamj,
 	)
 
 	if err != nil {
@@ -253,8 +309,8 @@ func TestNewCISInvoice(t *testing.T) {
 		t.Errorf("Expected IznosUkupno %v, got %v", iznosUkupno, invoice.IznosUkupno)
 	}
 
-	if invoice.NacinPlac != nacinPlac {
-		t.Errorf("Expected NacinPlac %v, got %v", nacinPlac, invoice.NacinPlac)
+	if invoice.NacinPlac != "G" {
+		t.Errorf("Expected NacinPlac G, got %v", invoice.NacinPlac)
 	}
 
 	if invoice.OibOper != oibOper {
@@ -263,18 +319,6 @@ func TestNewCISInvoice(t *testing.T) {
 
 	if invoice.ZastKod != zki {
 		t.Errorf("Expected ZastKod %v, got %v", zki, invoice.ZastKod)
-	}
-
-	if invoice.NakDost != nakDost {
-		t.Errorf("Expected NakDost %v, got %v", nakDost, invoice.NakDost)
-	}
-
-	if invoice.ParagonBrRac != paragonBrRac {
-		t.Errorf("Expected ParagonBrRac %v, got %v", paragonBrRac, invoice.ParagonBrRac)
-	}
-
-	if invoice.SpecNamj != specNamj {
-		t.Errorf("Expected SpecNamj %v, got %v", specNamj, invoice.SpecNamj)
 	}
 
 	// Additional checks for nullable fields
@@ -303,7 +347,7 @@ func TestNewCISInvoice(t *testing.T) {
 	t.Logf("Invoice XML: %s", xmlData)
 
 	// Send test invoice to CIS with InvoiceRequest
-	jir, zkiR, err := testEntity.InvoiceRequest(invoice)
+	jir, zkiR, err := invoice.InvoiceRequest()
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -339,16 +383,9 @@ func TestSimpleInvoiceFromReadme(t *testing.T) {
 		// taxation.
 		nil,       // naknade
 		"1250.00", // total
-		"G",       // payment method G - cash, K - credit card, T -
+		CISCash,   // payment method G - cash, K - credit card, T -
 		// transfer, O - other, C - check (deprecated)
 		"12345678901", // operator OIB
-		false,         // late delivery, if previous attempt failed but the
-		// invoice was issued with just ZKI
-		"", // receipt book number, if the invoicing system was
-		// unusable and the invoice was issued manually, the
-		// number of the receipt book
-		"", // unused, reserved field for future or temporary
-		// unexpected use by the CIS, should be empty
 	)
 
 	if err != nil {
@@ -356,7 +393,7 @@ func TestSimpleInvoiceFromReadme(t *testing.T) {
 	}
 
 	// Send test invoice to CIS with InvoiceRequest
-	jir, zkiR, err := testEntity.InvoiceRequest(invoice)
+	jir, zkiR, err := invoice.InvoiceRequest()
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)

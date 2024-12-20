@@ -1,7 +1,8 @@
+package fiskalhrgo
+
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024 L. D. T. d.o.o.
 // Copyright (c) contributors for their respective contributions. See https://github.com/l-d-t/fiskalhrgo/graphs/contributors
-package fiskalhrgo
 
 import (
 	"encoding/xml"
@@ -26,7 +27,7 @@ func TestEchoRequestMarshal(t *testing.T) {
 // Test for RacunZahtjev structure
 func TestRacunZahtjevMarshal(t *testing.T) {
 	racun := RacunZahtjev{
-		Zaglavlje: NewFiskalHeader(),
+		Zaglavlje: newFiskalHeader(),
 		Racun: &RacunType{
 			Oib:         "12345678901",
 			USustPdv:    true,

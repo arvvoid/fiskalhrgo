@@ -1,7 +1,8 @@
+package fiskalhrgo
+
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024 L. D. T. d.o.o.
 // Copyright (c) contributors for their respective contributions. See https://github.com/l-d-t/fiskalhrgo/graphs/contributors
-package fiskalhrgo
 
 import "testing"
 
@@ -45,27 +46,27 @@ func TestCheckCurrency(t *testing.T) {
 
 	// Test an invalid currency
 	if IsValidCurrencyFormat("abc") {
-		t.Fatalf("Expected currency 100 to be invalid")
+		t.Fatalf("Expected currency abc to be invalid")
 	}
 
 	// Test an invalid currency
 	if IsValidCurrencyFormat("abc.fg") {
-		t.Fatalf("Expected currency 100 to be invalid")
+		t.Fatalf("Expected currency abc.fg to be invalid")
 	}
 
 	// Test an invalid currency
 	if IsValidCurrencyFormat("abc.23") {
-		t.Fatalf("Expected currency 100 to be invalid")
+		t.Fatalf("Expected currency abc.23 to be invalid")
 	}
 
 	// Test an invalid currency
 	if IsValidCurrencyFormat("100.ab") {
-		t.Fatalf("Expected currency 100 to be invalid")
+		t.Fatalf("Expected currency 100.ab to be invalid")
 	}
 
 	// Test negative currency
-	if IsValidCurrencyFormat("-100.00") {
-		t.Fatalf("Expected currency 100 to be invalid")
+	if !IsValidCurrencyFormat("-100.00") {
+		t.Fatalf("Expected currency -100.00 to be valid")
 	}
 
 	//Test zero

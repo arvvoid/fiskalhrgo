@@ -1,7 +1,8 @@
+package fiskalhrgo
+
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024 L. D. T. d.o.o.
 // Copyright (c) contributors for their respective contributions. See https://github.com/l-d-t/fiskalhrgo/graphs/contributors
-package fiskalhrgo
 
 import (
 	"os"
@@ -12,8 +13,17 @@ import (
 // Helper function to validate if the string is a valid currency format (with 2 decimal places)
 func IsValidCurrencyFormat(amount string) bool {
 	// Regex pattern to match valid decimal with exactly two decimal places
-	validCurrency := regexp.MustCompile(`^\d+(\.\d{2})$`)
+	validCurrency := regexp.MustCompile(`^-?\d+(\.\d{2})$`)
 	return validCurrency.MatchString(amount)
+}
+
+// IsValidTaxRate checks if the given string is a valid non-negative tax rate with exactly two decimal places.
+// Allows positive values and 0.00, but not negative values.
+func IsValidTaxRate(rate string) bool {
+	// Regex pattern to match a positive or zero decimal number with exactly two decimal places
+	// Matches values like "0.00", "25.00", "5.00", etc.
+	validTaxRate := regexp.MustCompile(`^([0-9]+)(\.[0-9]{2})$`)
+	return validTaxRate.MatchString(rate)
 }
 
 // ValidateOIB checks if an OIB is valid using the Mod 11, 10 algorithm
@@ -84,4 +94,20 @@ func IsFileReadable(filePath string) bool {
 	defer file.Close()
 
 	return true
+}
+
+// ValidateJIR checks if the given JIR is a valid UUID format (e.g., "9d6f5bb6-da48-4fcd-a803-4586a025e0e4").
+// Returns true if valid, otherwise false.
+func ValidateJIR(jir string) bool {
+	// Regular expression to match UUID format (e.g., "9d6f5bb6-da48-4fcd-a803-4586a025e0e4")
+	var jirRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	return jirRegex.MatchString(jir)
+}
+
+// ValidateZKI checks if the given ZKI is a valid MD5 hash in hexadecimal format (32 characters).
+// Returns true if valid, otherwise false.
+func ValidateZKI(zki string) bool {
+	// Regular expression to match a 32-character hexadecimal MD5 hash
+	var zkiRegex = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	return zkiRegex.MatchString(zki)
 }
